@@ -81,26 +81,15 @@ func runCache(opts CacheOptions, gopts global.Options, args []string, term ui.Te
 	}
 
 	if opts.Cleanup || gopts.CleanupCache {
-		oldDirs, err := cache.OlderThan(cachedir, time.Duration(opts.MaxAge)*24*time.Hour)
+		removed, err := cache.Clean(cachedir, printer, time.Duration(opts.MaxAge)*24*time.Hour, false)
 		if err != nil {
 			return err
 		}
-
-		if len(oldDirs) == 0 {
+		if removed != 0 {
+			printer.P("removed %d old cache directories", removed)
+		} else {
 			printer.P("no old cache dirs found")
-			return nil
 		}
-
-		printer.P("remove %d old cache directories", len(oldDirs))
-
-		for _, item := range oldDirs {
-			dir := filepath.Join(cachedir, item.Name())
-			err = os.RemoveAll(dir)
-			if err != nil {
-				printer.E("unable to remove %v: %v", dir, err)
-			}
-		}
-
 		return nil
 	}
 

@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -431,32 +430,14 @@ func setupCache(s *repository.Repository, gopts Options, printer restic.Printer)
 
 	// start using the cache
 	s.UseCache(c, printer.E)
-
-	oldCacheDirs, err := cache.Old(c.Base)
-	if err != nil {
-		printer.E("unable to find old cache directories: %v", err)
-	}
-
-	// nothing more to do if no old cache dirs could be found
-	if len(oldCacheDirs) == 0 {
-		return nil
-	}
-
-	// cleanup old cache dirs if instructed to do so
-	if gopts.CleanupCache {
-		printer.PT("removing %d old cache dirs from %v", len(oldCacheDirs), c.Base)
-		for _, item := range oldCacheDirs {
-			dir := filepath.Join(c.Base, item.Name())
-			err = os.RemoveAll(dir)
-			if err != nil {
-				printer.E("unable to remove %v: %v", dir, err)
-			}
-		}
-	} else {
+	var removed int
+	removed, err = cache.Clean(gopts.CacheDir, printer, 0, !gopts.CleanupCache)
+	if !gopts.CleanupCache {
 		printer.PT("found %d old cache directories in %v, run `restic cache --cleanup` to remove them",
-			len(oldCacheDirs), c.Base)
+			removed, c.Base)
 	}
-	return nil
+	return err
+
 }
 
 // CreateRepository a repository with the given version and chunker polynomial.

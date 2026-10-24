@@ -12,6 +12,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/restic/restic/internal/backend"
 	"github.com/restic/restic/internal/debug"
+	"github.com/restic/restic/internal/restic"
 )
 
 // Cache manages a local cache.
@@ -227,6 +228,49 @@ func OlderThan(basedir string, max time.Duration) ([]os.FileInfo, error) {
 // than 30 days ago.
 func Old(basedir string) ([]os.FileInfo, error) {
 	return OlderThan(basedir, MaxCacheAge)
+}
+
+func Clean(cacheDir string, printer restic.Printer, duration time.Duration, dryrun bool) (int, error) {
+	var (
+		oldCacheDirs []os.FileInfo
+		err          error
+	)
+	removed := 0
+
+	if duration != 0 {
+		oldCacheDirs, err = Old(cacheDir)
+	} else {
+		oldCacheDirs, err = OlderThan(cacheDir, duration)
+	}
+
+	if err != nil {
+		printer.E("unable to find old cache directories: %v", err)
+		return removed, err
+	}
+
+	// nothing more to do if no old cache dirs could be found
+	if len(oldCacheDirs) == 0 {
+		return removed, nil
+	}
+
+	if !dryrun {
+		printer.PT("removing %d old cache dirs from %v", len(oldCacheDirs), cacheDir)
+		failed := false
+		for _, item := range oldCacheDirs {
+			dir := filepath.Join(cacheDir, item.Name())
+			err = os.RemoveAll(dir)
+			if err != nil {
+				printer.E("unable to remove %v: %v", dir, err)
+				failed = true
+			} else {
+				removed += 1
+			}
+		}
+		if failed {
+			return removed, errors.New("failures encountered cleaning cache directories")
+		}
+	}
+	return removed, nil
 }
 
 // IsOld returns true if the timestamp is considered old.
